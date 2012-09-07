@@ -175,7 +175,7 @@ class Assets extends \lithium\template\Helper {
 
 			}
 
-			$filename .= $path;
+			$filename .= $file;
 
 			// add asset to assetic collection
 			$this->{$type}->add( 
