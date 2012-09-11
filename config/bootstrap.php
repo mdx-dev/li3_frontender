@@ -23,7 +23,7 @@ defined('FRONTENDER_VENDORS') OR define('FRONTENDER_VENDORS', FRONTENDER_PATH . 
 defined('FRONTENDER_LIBS') OR define('FRONTENDER_LIBS', FRONTENDER_PATH . "/libraries");
 defined('FRONTENDER_SRC') OR define('FRONTENDER_SRC', FRONTENDER_LIBS . "/assetic/src/Assetic");
 
-defined('CACHE_DIR') OR define('CACHE_DIR', Libraries::get(true, 'resources') . "/tmp/cache");
+defined('FRONTENDER_WEBROOT_DIR') OR define('FRONTENDER_WEBROOT_DIR', __DIR__ . "/../../../webroot");
 
 /**
  * Load in project dependancies which include

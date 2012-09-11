@@ -5,7 +5,6 @@ namespace li3_frontender\extensions\helper;
 use RuntimeException;
 use \lithium\core\Environment;
 use \lithium\core\Libraries;
-use \lithium\storage\Cache;
 use \lithium\util\String;
 
 // Assetic Classes
@@ -226,16 +225,17 @@ class Assets extends \lithium\template\Helper {
 		// ---
 		// If you change a file in the styles added then a recache is made due
 		// to the fact that the file stats changed
-		if(!$cached = Cache::read('default', "{$options['type']}/{$filename}")){
+		$cached_path = FRONTENDER_WEBROOT_DIR . "/{$options['type']}/compiled/{$filename}";
+		if(!file_exists($cached_path) || !$cached = file_get_contents($cached_path)){
 			$this->setCache($filename, $content->dump(), array('location' => $options['type']));			
 		}
 
 		// pass single stylesheet link
 		switch($options['type']){
 			case 'css':
-				return $this->_context->helper('html')->style("{$filename}") . "\n\t";
+				return $this->_context->helper('html')->style("compiled/{$filename}") . "\n\t";
 			case 'js':
-				return $this->_context->helper('html')->script("{$filename}") . "\n\t";
+				return $this->_context->helper('html')->script("compiled/{$filename}") . "\n\t";
 		}
 
 	}
@@ -249,7 +249,8 @@ class Assets extends \lithium\template\Helper {
 	private function setCache($filename, $content, $options = array()){
 
 		// Create css cache dir if it doesnt exist.
-		if (!is_dir($cache_location = CACHE_DIR . "/{$options['location']}")) {
+		// FIXME This is janky
+		if (!is_dir($cache_location = FRONTENDER_WEBROOT_DIR . "/" . $options['location'] . "/compiled")) {
 			mkdir($cache_location, 0755, true);
 		}
 
@@ -272,7 +273,7 @@ class Assets extends \lithium\template\Helper {
 			
 				 if(preg_match("/^{$like_files}/", $oldfile)){
 
-					 Cache::delete('default', "{$options['location']}/{$oldfile}");
+					 unlink("{$options['location']}/{$oldfile}");
 
 				 }
 
@@ -282,7 +283,7 @@ class Assets extends \lithium\template\Helper {
 
 		 }
 
-		Cache::write('default', "{$options['location']}/{$filename}", $content, $options['length']);
+		file_put_contents("{$cache_location}/{$filename}", $content);
 
 	}
 
