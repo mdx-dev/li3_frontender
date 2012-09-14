@@ -273,7 +273,7 @@ class Assets extends \lithium\template\Helper {
 			
 				if(preg_match("/^{$like_files}/", $oldfile)){
 
-					unlink("{$options['location']}/{$oldfile}");
+					file_exists("{$options['location']}/{$oldfile}") && unlink("{$options['location']}/{$oldfile}");
 
 				}
 
