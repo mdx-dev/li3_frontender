@@ -267,21 +267,21 @@ class Assets extends \lithium\template\Helper {
 
 
 		// loop thru cache and delete old cache file
-		 if (!$this->_production && $handle = opendir($cache_location)) {
+		if (!$this->_production && $handle = opendir($cache_location)) {
 
-			 while (false !== ($oldfile = readdir($handle))) {
+			while (false !== ($oldfile = readdir($handle))) {
 			
-				 if(preg_match("/^{$like_files}/", $oldfile)){
+				if(preg_match("/^{$like_files}/", $oldfile)){
 
-					 unlink("{$options['location']}/{$oldfile}");
+					unlink("{$options['location']}/{$oldfile}");
 
-				 }
+				}
 
-			 }
+			}
 
-			 closedir($handle);
+			closedir($handle);
 
-		 }
+		}
 
 		file_put_contents("{$cache_location}/{$filename}", $content);
 
