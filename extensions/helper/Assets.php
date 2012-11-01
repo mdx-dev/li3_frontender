@@ -33,6 +33,7 @@ class Assets extends \lithium\template\Helper {
 
 		$defaults = array(
 			'compress' => false,
+			'queryString' => true,
 			'assets_root' => LITHIUM_APP_PATH . "/webroot",
 			'production' => (Environment::get() == 'production'),
 			'locations' => array(
@@ -69,6 +70,7 @@ class Assets extends \lithium\template\Helper {
 		);
 
 		if(gettype($stylesheets) == 'string') {
+			$options['manifest'] = $stylesheets;						
 			$stylesheets = $this->_config['manifests']['css'][$stylesheets];
 		}
 
@@ -89,6 +91,7 @@ class Assets extends \lithium\template\Helper {
 		);
 
 		if(gettype($scripts) == 'string') {
+			$options['manifest'] = $scripts;
 			$scripts = $this->_config['manifests']['js'][$scripts];
 		}
 
@@ -182,24 +185,21 @@ class Assets extends \lithium\template\Helper {
 			);
 
 		} 
-
+		
 		// If in production merge files and server up a single stylesheet
 		if($this->_production){
 
-			// Hashed filename without stats appended.
-			$_rawFilename = String::hash($filename, array('type' => 'sha1'));
-			echo $this->buildHelper($_rawFilename, $this->{$type}, array('type' => $options['type'], 'stats' => $stats));
+			echo $this->buildHelper($filename, $this->{$type}, array_merge($options, array('stats' => $stats)));
 
 		} else {
 
 			// not production so lets serve up individual files (better debugging)
 			foreach($this->{$type} as $leaf){
 
-				$filename = "{$leaf->getSourceRoot()}/{$leaf->getSourcePath()}";
-				$_rawFilename = String::hash($filename, array('type' => 'sha1'));
-				$stat = isset($stats[$filename]) ? $stats[$filename] : false;
+				$fullPath = "{$leaf->getSourceRoot()}/{$leaf->getSourcePath()}";
+				$stat = isset($stats[$fullPath]) ? $stats[$fullPath] : false;
 
-				if ($stat) echo $this->buildHelper($_rawFilename, $leaf, array('type' => $options['type'], 'stats' => $stat));
+				if ($stat) echo $this->buildHelper($leaf->getSourcePath(), $leaf, array_merge($options, array('stats' => $stats)));
 
 			}
 
@@ -215,10 +215,23 @@ class Assets extends \lithium\template\Helper {
 	 * @return string           lithium link helper
 	 */
 	private function buildHelper($filename, $content, array $options = array()){
+		if(isset($options['manifest']) && !empty($options['manifest'])){
+			$filename = $options['manifest'];
+		}
 
-		// print_r($options);
+		if(strlen($filename) > 250){
+			$filename = substr($filename, 0, 250);
+		}
 
-		$filename = "{$filename}_{$options['stats']['size']}_{$options['stats']['modified']}.{$options['type']}";
+		if(isset($this->_config['queryString']) && $this->_config['queryString'] == true){
+			$filename = $filename.'.'.$options['type'];
+			$link = $filename.'?'.String::hash($options['stats']['size'].$options['stats']['modified'], array('type' => 'sha1'));
+		} else {
+			$filename = String::hash($filename, array('type' => 'sha1'));			
+			$filename = "{$filename}_{$options['stats']['size']}_{$options['stats']['modified']}.{$options['type']}";		
+			$link = $filename;
+		}
+
 
 		// If Cache doesn't exist then we recache
 		// Recache removes old caches and adds the new
@@ -233,9 +246,9 @@ class Assets extends \lithium\template\Helper {
 		// pass single stylesheet link
 		switch($options['type']){
 			case 'css':
-				return $this->_context->helper('html')->style("compiled/{$filename}") . "\n\t";
+				return $this->_context->helper('html')->style("compiled/{$link}") . "\n\t";
 			case 'js':
-				return $this->_context->helper('html')->script("compiled/{$filename}") . "\n\t";
+				return $this->_context->helper('html')->script("compiled/{$link}") . "\n\t";
 		}
 
 	}
@@ -270,7 +283,7 @@ class Assets extends \lithium\template\Helper {
 		if (!$this->_production && $handle = opendir($cache_location)) {
 
 			while (false !== ($oldfile = readdir($handle))) {
-			
+
 				if(preg_match("/^{$like_files}/", $oldfile)){
 
 					file_exists("{$options['location']}/{$oldfile}") && unlink("{$options['location']}/{$oldfile}");
