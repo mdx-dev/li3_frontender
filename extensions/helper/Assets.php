@@ -215,14 +215,17 @@ class Assets extends \lithium\template\Helper {
 	 * @return string           lithium link helper
 	 */
 	private function buildHelper($filename, $content, array $options = array()){
-		if(isset($options['manifest']) && !empty($options['manifest'])){
+		// if it is production and using manifest, name file according to manifest
+		if($this->_production && isset($options['manifest']) && !empty($options['manifest'])){
 			$filename = $options['manifest'];
 		}
 
+		// just in case filename is too long
 		if(strlen($filename) > 250){
 			$filename = substr($filename, 0, 250);
 		}
 
+		// switch between query string or unique filename
 		if(isset($this->_config['queryString']) && $this->_config['queryString'] == true){
 			$filename = $filename.'.'.$options['type'];
 			$link = $filename.'?'.String::hash($options['stats']['size'].$options['stats']['modified'], array('type' => 'sha1'));
