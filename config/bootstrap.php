@@ -45,11 +45,35 @@ Dispatcher::applyFilter('run', function($self, $params, $chain) use ($options) {
 					'name' => 'Script'
 			),
 	);
+
+	/**
+	 * Read cache files for assets
+	 * Returns CSS/Js from Cache if exists
+	 * @param  object $request
+	 * @return string          contents of cache file
+	 */
+	$readCache = function($request, array $options) {
+		$http_response_code = null;
+		if (!$content = Cache::read('default', $request->url)) {
+			// TODO: config switch
+			if (!$options['cacheOnly']) {
+				return false;
+			}
+			$http_response_code = 404;
+			$content = '404: ' . $options['name'] . ' does not exist';
+		}
+
+		// TODO: use lithium constructs
+		header('Content-Type: '. $options['type'], true, $http_response_code);
+		echo $content;
+		return true;
+	};
+
 	foreach(array_keys($assets) as $type) {
 		$config = $assets[$type];
 		$config['cacheOnly'] = $options['cacheOnly'];
 		if(preg_match($config['match'], $params['request']->url)) {
-			if (readCache($params['request'], $config)) {
+			if ($readCache($params['request'], $config)) {
 				return;
 			}
 		}
@@ -59,28 +83,3 @@ Dispatcher::applyFilter('run', function($self, $params, $chain) use ($options) {
 	return $chain->next($self, $params, $chain);
 
 });
-
-/**
- * Read cache files for assets
- * Returns CSS/Js from Cache if exists
- * @param  object $request
- * @return string          contents of cache file
- */
-function readCache($request, array $options) {
-
-
-	$http_response_code = null;
-	if (!$content = Cache::read('default', $request->url)) {
-		// TODO: config switch
-		if (!$options['cacheOnly']) {
-			return false;
-		}
-		$http_response_code = 404;
-		$content = '404: ' . $options['name'] . ' does not exist';
-	}
-
-	// TODO: use lithium constructs
-	header('Content-Type: '. $options['type'], true, $http_response_code);
-	echo $content;
-	return true;
-};
