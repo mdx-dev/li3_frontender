@@ -33,6 +33,7 @@ class Assets extends \lithium\template\Helper {
 
 		$defaults = array(
 			'compress' => false,
+			'cacheString' => null,
 			'queryString' => true,
 			'assets_root' => LITHIUM_APP_PATH . "/webroot",
 			'production' => (Environment::get() == 'production'),
@@ -225,16 +226,20 @@ class Assets extends \lithium\template\Helper {
 			$filename = substr($filename, 0, 250);
 		}
 
+		if(isset($this->_config['cacheString'])){
+			$cacheBusting = $this->_config['cacheString'];
+		} else {
+			$cacheBusting = '_'.String::hash($options['stats']['size'].$options['stats']['modified'], array('type' => 'sha1'));
+		}
+
 		// switch between query string or unique filename
 		if(isset($this->_config['queryString']) && $this->_config['queryString'] == true){
 			$filename = $filename.'.'.$options['type'];
-			$link = $filename.'?'.String::hash($options['stats']['size'].$options['stats']['modified'], array('type' => 'sha1'));
+			$link = $filename.(!empty($cacheBusting) ? '?'.trim($cacheBusting, '_') : '');
 		} else {
-			$filename = String::hash($filename, array('type' => 'sha1'));			
-			$filename = "{$filename}_{$options['stats']['size']}_{$options['stats']['modified']}.{$options['type']}";		
+			$filename = "{$filename}{$cacheBusting}.{$options['type']}";		
 			$link = $filename;
 		}
-
 
 		// If Cache doesn't exist then we recache
 		// Recache removes old caches and adds the new
