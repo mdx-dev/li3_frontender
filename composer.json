@@ -1,5 +1,5 @@
 {
-	"name": "brandonwestcott/li3_frontender",
+	"name": "mdx-dev/li3_frontender",
 	"type": "li3-libraries",
 	"description": "Lithium PHP asset extension",
 	"keywords": ["styles", "assets", "compression", "js", "lithium", "li3"],
@@ -16,7 +16,6 @@
 	"require": {
 		"php": ">=5.3",
 		"joseym/li3_installer": "master",
-		"kriswallsmith/assetic": "dev-master",
 		"leafo/lessphp":"master"
 	}
 
