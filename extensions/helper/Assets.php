@@ -71,6 +71,7 @@ class Assets extends \lithium\template\Helper {
 
 		$files = $manifest->compile(true); // simulate
 		if(!$this->config['batch_only']) {
+			$this->cleanOldRev($type);
 			$compile = false;
 			foreach($files as $file) {
 				if(!file_exists($file)) $compile = true;
@@ -85,6 +86,28 @@ class Assets extends \lithium\template\Helper {
 		}
 
 		return $relative;
+	}
+
+	protected function cleanOldRev($type) {
+		if($this->getRev($type) !== $this->config['cacheString']) {
+			$files = glob($this->config['root'] . "/$type/compiled/*");
+			foreach($files as $file){
+				if(is_file($file)) unlink($file);
+			}
+			$this->setRev($type);
+		}
+	}
+
+	protected function getRev($type) {
+		$rev_filename = $this->config['root'] . "/$type/compiled/REV";
+		if(file_exists($rev_filename)) {
+			return trim(file_get_contents($rev_filename));
+		}
+	}
+
+	protected function setRev($type) {
+		$rev_filename = $this->config['root'] . "/$type/compiled/REV";
+		file_put_contents($rev_filename, $this->config['cacheString']);
 	}
 
 }
