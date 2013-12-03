@@ -66,42 +66,25 @@ class Assets extends \lithium\template\Helper {
 	 * @return array            filenames of assets
 	 */
 	protected function build($type, $manifest) {
+		Manifest::resetProcessed();
 		$manifest = new Manifest($type, $manifest);
-		$simulate = $this->config['batch_only'];
 
-		// only compile if rev/cache string has changed
-		if(!$simulate) {
-			$sameRev = ($this->getRev($type) === $this->config['cacheString']);
-			if($sameRev) $simulate = true;
-		} else {
-			$sameRev = false;
+		$files = $manifest->compile(true); // simulate
+		if(!$this->config['batch_only']) {
+			$compile = false;
+			foreach($files as $file) {
+				if(!file_exists($file)) $compile = true;
+			}
+			if($compile) $files = $manifest->compile();
 		}
 
-		$files = $manifest->compile($simulate);
 		$relative = array();
 		foreach($files as $file) {
 			if(!$this->config['mangle']) $file .= "?" . $this->config['cacheString'];
 			$relative[] = substr($file, strlen($this->config['root']));
 		}
 
-		if(!$sameRev) $this->setRev($type);
-
 		return $relative;
 	}
-
-	protected function getRev($type) {
-		$rev_filename = $this->config['root'] . "/$type/compiled/REV";
-		if(file_exists($rev_filename)) {
-			return trim(file_get_contents($rev_filename));
-		} else {
-			Manifest::$processed = array(); // need to reset this since the directory was deleted
-		}
-	}
-
-	protected function setRev($type) {
-		$rev_filename = $this->config['root'] . "/$type/compiled/REV";
-		file_put_contents($rev_filename, $this->config['cacheString']);
-	}
-
 
 }

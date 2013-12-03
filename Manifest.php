@@ -19,6 +19,15 @@ class Manifest {
 	// list of assets that have already been processed
 	public static $processed = array();
 
+	/*
+	 * Resets the list of processed assets.
+	 *
+	 * Call this from the asset helper.
+	 */
+	public static function resetProcessed() {
+		static::$processed = array();
+	}
+
 	/**
 	 * Returns an array of manifest objects based on the config.
 	 *
@@ -79,7 +88,6 @@ class Manifest {
 			if(!$simulate) {
 				$this->copyOrCompile($in, $out);
 			}
-			static::$processed[] = $out;
 			$in_manifest[] = $out;
 		}
 		if($this->mangle) {
@@ -124,6 +132,7 @@ class Manifest {
 			$start = microtime(true);
 			if(!in_array($out, static::$processed)) {
 				$this->compileFile($in, $out);
+				static::$processed[] = $out;
 			}
 			$ms = (int)((microtime(true) - $start) * 1000);
 			if($this->verbose) echo("  compiled $out ($ms msec)\n");
