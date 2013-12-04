@@ -101,7 +101,7 @@ class Assets extends \lithium\template\Helper {
 	protected function cleanOldRev($type, $file) {
 		$pattern = preg_replace("/_\d+\.(.+)$/", "_\\d+.\\1", $file);
 		$pattern = '/'.preg_replace("/\\//", "\\/", $pattern).'/';
-		$files = glob($this->config['root'] . "/$type/compiled/**");
+		$files = glob($this->config['root'] . "/$type/compiled/**/*");
 		foreach($files as $file){
 			if(preg_match($pattern, $file) && is_file($file)) {
 				if($this->debug) { echo "<pre>removing: $file</pre>"; }
