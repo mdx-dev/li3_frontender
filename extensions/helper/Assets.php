@@ -20,6 +20,7 @@ class Assets extends \lithium\template\Helper {
 	public function _init(){
 		parent::_init();
 		$this->config = Libraries::get('li3_frontender');
+		$this->debug = $this->config['debug'];
 	}
 
 	/**
@@ -68,46 +69,45 @@ class Assets extends \lithium\template\Helper {
 	protected function build($type, $manifest) {
 		Manifest::resetProcessed();
 		$manifest = new Manifest($type, $manifest);
+		$manifest->timestamp = !$this->config['batch_only'];
+		$manifest->verbose = $this->debug;
 
-		$files = $manifest->compile(true); // simulate
-		if(!$this->config['batch_only']) {
-			$this->cleanOldRev($type);
-			$compile = false;
-			foreach($files as $file) {
-				if(!file_exists($file)) $compile = true;
+		if($this->config['batch_only']) {
+			$files = array($this->mangledFilename());
+		} else {
+			$files = $manifest->filenameMappings();
+			$compile = array();
+			foreach($files as $in => $out) {
+				if(!file_exists($out)) {
+					$this->cleanOldRev($type, $out);
+					$compile[] = $in;
+				}
 			}
-			if($compile) $files = $manifest->compile();
+			if(count($compile) > 0) {
+				if($this->debug) echo "<pre>";
+				$manifest->compile($compile); // compile!
+				if($this->debug) echo "</pre>";
+			}
 		}
 
 		$relative = array();
 		foreach($files as $file) {
-			if(!$this->config['mangle']) $file .= "?" . $this->config['cacheString'];
 			$relative[] = substr($file, strlen($this->config['root']));
 		}
 
 		return $relative;
 	}
 
-	protected function cleanOldRev($type) {
-		if($this->getRev($type) !== $this->config['cacheString']) {
-			$files = glob($this->config['root'] . "/$type/compiled/*");
-			foreach($files as $file){
-				if(is_file($file)) unlink($file);
+	protected function cleanOldRev($type, $file) {
+		$pattern = preg_replace("/_\d+\.(.+)$/", "_\\d+.\\1", $file);
+		$pattern = '/'.preg_replace("/\\//", "\\/", $pattern).'/';
+		$files = glob($this->config['root'] . "/$type/compiled/**");
+		foreach($files as $file){
+			if(preg_match($pattern, $file) && is_file($file)) {
+				if($this->debug) { echo "<pre>removing: $file</pre>"; }
+				unlink($file);
 			}
-			$this->setRev($type);
 		}
-	}
-
-	protected function getRev($type) {
-		$rev_filename = $this->config['root'] . "/$type/compiled/REV";
-		if(file_exists($rev_filename)) {
-			return trim(file_get_contents($rev_filename));
-		}
-	}
-
-	protected function setRev($type) {
-		$rev_filename = $this->config['root'] . "/$type/compiled/REV";
-		file_put_contents($rev_filename, $this->config['cacheString']);
 	}
 
 }

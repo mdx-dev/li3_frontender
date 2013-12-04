@@ -15,6 +15,7 @@ class Manifest {
 	public $out_path;           // root directory where target files are written, usually app/webroot/js/compiled or app/webroot/css/compiled
 	public $verbose = false;    // set to true to get verbose logging about which assets are being built
 	public $mangle = false;     // set to true to combine individual assets and minify
+	public $timestamp = false;  // set to true to append timestamp of source file to target filenames (typically used with $mangle=false for dev mode)
 
 	// list of assets that have already been processed
 	public static $processed = array();
@@ -77,22 +78,25 @@ class Manifest {
 	/**
 	 * Compiles all assets in a manifest.
 	 *
-	 * @param boolean $simulate set to true to skip compilation and mangling steps (use this in production)
+	 * @param array $files list of (source) files to compile (if null, will compile all files in manifest)
 	 * @return array if($this->mangle) array with single path to combined, mangled asset
 	 *               otherwise, absolute paths to individual built assets
 	 */
-	public function compile($simulate=false) {
+	public function compile($files=null) {
 		$in_manifest = array();
 		if($this->verbose) echo "{$this->type} manifest '{$this->name}'\n";
-		foreach($this->filenameMappings() as $in => $out) {
-			if(!$simulate) {
-				$this->copyOrCompile($in, $out);
-			}
+		if($files) {
+			$files = array_intersect_key($this->filenameMappings(), array_flip($files));
+		} else {
+			$files = $this->filenameMappings();
+		}
+		foreach($files as $in => $out) {
+			$this->copyOrCompile($in, $out);
 			$in_manifest[] = $out;
 		}
 		if($this->mangle) {
 			$mangled_filename = $this->mangledFilename();
-			if(!$simulate) $this->merge($mangled_filename, $in_manifest);
+			$this->merge($mangled_filename, $in_manifest);
 			return array($mangled_filename);
 		} else {
 			return $in_manifest;
@@ -122,9 +126,21 @@ class Manifest {
 			$filename = $this->appendFileType($filename, true);
 			$in = $this->in_path . $filename;
 			$out = $this->appendFileType($this->out_path . $filename);
+			if($this->timestamp) $out = $this->appendTimestamp($out, filemtime($in));
 			$mappings[$in] = $out;
 		}
 		return $mappings;
+	}
+
+	/**
+	 * Returns a new path with the given timestamp append (just before the file extension)
+	 *
+	 * @param string $file filename
+	 * @param string $timestamp timestamp to append
+	 * @return string new filename
+	 */
+	protected function appendTimestamp($file, $timestamp) {
+		return preg_replace("/\\.(.+)$/", "_$timestamp.\\1", $file);
 	}
 
 	protected function copyOrCompile($in, $out) {
