@@ -233,7 +233,7 @@ class Manifest {
 		$start = microtime(true);
 		switch($this->type) {
 		case 'js':
-			$cmd = "uglifyjs " . implode($filenames, ' ') . " -o $path -c -m 2>/dev/null";
+			$cmd = "uglifyjs " . implode($filenames, ' ') . " -o $path -m 2>/dev/null";
 			system($cmd, $ret);
 			break;
 		case 'css':
