@@ -15,8 +15,7 @@
 
 	"require": {
 		"php": ">=5.3",
-		"joseym/li3_installer": "master",
-		"leafo/lessphp":"0.3.9"
+		"joseym/li3_installer": "master"
 	}
 
 }
