@@ -58,7 +58,7 @@ class Manifest {
 		$this->type = $type;
 		$this->name = $name;
 
-		$this->less_binary = dirname(dirname(__DIR__)) . "/libraries/_source/leafo/lessphp/plessc";
+		$this->less_binary = 'lessc';
 		$this->coffee_binary = "coffee";
 
 		$this->config = Libraries::get('li3_frontender');
@@ -212,6 +212,7 @@ class Manifest {
 		if($ret != 0) {
 			echo("    ERROR - could not compile asset.\n");
 			echo("    Try running: $cmd\n");
+			print_r(compact('cmd', 'result', 'ret'));
 			exit(1);
 		} else if($result) {
 			$result = implode($result, "\n");
