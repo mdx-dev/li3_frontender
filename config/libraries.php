@@ -27,14 +27,6 @@ Libraries::add("Symfony", array(
 ));
 
 /**
- * Less PHP Compiler class
- */
-Libraries::add("lessc", array(
-	"path" => $_lessc_path,
-	"bootstrap" => "lessc.inc.php",
-));
-
-/**
  * Assetic Library
  */
 Libraries::add("Assetic", array(
