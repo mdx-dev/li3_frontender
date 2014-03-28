@@ -1,50 +1,25 @@
-# Assets Plugin for [li3](http://lithify.me)
-
-***
-
-> This is my second draft of an Assets plugin for Lithium PHP. The first was a great learning experiance but I've decided there are a number of things I would change.
-
-***
-
-This Plugin now uses the awesome [Assetic](https://github.com/kriswallsmith/assetic) library to power many of it's features.
-
-## Original Project
-
-> This is a branch off of my [original assets plugin ("li3_frontender")](https://github.com/joseym/li3_frontender/tree/legacy)(legacy branch)
-> If you would like to use the old version, you can clone it from there.
+# Assets Plugin for [li3](http://li3.me)
+This is a heavily modified fork; you probably shouldn't be using this. You can
+find the original project here:
+[joseym/li3_frontender](https://github.com/joseym/li3_frontender)
 
 ## Installation
 There are several ways to grab and use this project:
 
-### Use Composer
-__Best Option (default)__
+### Use [Composer](https://getcomposer.org)
+Include the following in your project's `composer.json` file
 
-> Other install options require a configuration parameter be set in `Libraries::add()`
-> [More on that later](https://github.com/joseym/li3_frontender#configuration-options).
-
-Modify your projects `composer.json` file
-
-~~~ json
+```json
 {
     "require": {
-    	...
-        "joseym/li3_frontender": "master"
-        ...
+        "mdx-dev/li3_frontender": "dev-master"
     }
 }
-~~~
+```
 
 Run `php composer.phar install` (or `php composer.phar update`) and, aside from adding it to your Libraries, you should be good to go.
 
-> __Notice:__ LessPHP does not currently provide a composer package, therefore I have branched the project and have submitted my own package until such time as [Leafo decides to adopt composer](https://github.com/leafo/lessphp/issues/216).
-> I will do my best to keep it up to date with the primary project.
-
 ### Load via Submodule
-__More manual, bleh. Seriously, Composer is awesome__
-
-> This option requires that you tell the plugin you are not using `composer`.
-> [See library option (`source`)](https://github.com/joseym/li3_frontender#configuration-options)
-
 1. Clone/Download the plugin into your app's ``libraries`` directory.
 2. Tell your app to load the plugin by adding the following to your app's ``config/bootstrap/libraries.php``:
 
@@ -53,21 +28,10 @@ __More manual, bleh. Seriously, Composer is awesome__
 	> Important to set the source to something else as 'composer'.
 	> Configuration options are available, standby
 
-3. Pull in the the project dependencies.
-
-> Currently dependancies include [Assetic](https://github.com/kriswallsmith/assetic#readme), [Symfony/Process](https://github.com/symfony/Process#readme) and [LessPHP](https://github.com/leafo/lessphp#readme).
-
-	$ cd app/libraries/li3_frontender
-	$ git submodule init
-	$ git submodule update
-
+### System executables
+You'll need [Node.JS](http://nodejs.org/) along with less, coffeescript, and bless packages.
 
 ## Usage
-
-> If you use coffee script you will have to ensure [Node.JS](http://nodejs.org/) and [CoffeeScript](http://http://coffeescript.org) are running on your server.
-
-This project also comes packaged with [YUI Compressor](http://yuilibrary.com/download/yuicompressor/), which Assetic uses for compression of JS and CSS assets.
-
 Currently this project supports the following frontend tools:
 
 1. LessCSS compiling
@@ -75,136 +39,173 @@ Currently this project supports the following frontend tools:
 3. Instant cache busting thru unique filenames
 4. CSS/JS Compression
 
-The project comes bundled with it's own [Helper](https://github.com/joseym/li3_frontender/blob/assetic/extensions/helper/Assets.php), here's how use use it.
+The project comes bundled with it's own [Helper](https://github.com/mdx-dev/li3_frontender/blob/master/extensions/helper/Assets.php), here's how use use it.
 
 ### Linking Stylesheets
-You assign page styles much like you would with the out-of-the-box Html helper
+You assign page styles by specifying the name of a manifest.
 
-~~~ php
-<?php $this->assets->style(array('main', 'menu', 'magic.less')); ?>
-~~~
-
-> You may have noticed the `.less` file in there. Adding the file extension is required for `.less` files to ensure they are compiled, you may include the `.css` extension for standard stylesheets or just leave it off.
+```php
+<?php $this->assets->style('my-css-manifest'); ?>
+```
 
 ### Linking Scripts
-Like the style helper, the script helper also takes an array.
+Like the style helper, the script helper also takes a manifest name.
 
-~~~ php
-<?php $this->assets->script(array('plugins', 'common', 'niftythings.coffee')); ?>
-~~~
-
-> Just like the `.less` file in the last example, if you pass a `.coffee` file to the script helper the plugin will compile it and serve up the proper, compiled, js. All other files are assumed `.js`. Feel free to add `.js` to these extensions if you would like.
-
-## Production vs Development
-
-> The backend of this plugin will do its best to determine if you're in a dev environment or production, if you're in a production environment this plugin will automatically compress your stylesheets and scripts and merge them into a single file and serve __that__ file up to your layout or view.
-
-This option, and several others are overwriteable from the `Libraries::add()` configuration. Here's an example
-
-~~~ php
-<?php
-	Libraries::add('li3_frontender', array(
-		'compress' => false,
-		'production' => true,
-		'assets_root' => LITHIUM_APP_PATH . "/webroot/assets",
-		'locations' => array(
-			'coffee' => '/usr/bin/libs/coffee',
-			'node' => '/usr/bin/libs/node'
-		),
-		'source' => 'submodule',
-		'cacheOnly' => true
-	));
-?>
-~~~
+```php
+<?php $this->assets->script('my-script-manifest'); ?>
+```
 
 ### Configuration options
+Several options can be set from the `Libraries::add()` configuration. Here's an example.
+
+```php
+<?php
+	Libraries::add('li3_frontender', array(
+		'mergeAssets' => true,
+		'root' => LITHIUM_APP_PATH . "/webroot/assets",
+		'cacheBuster' =>false,
+		'blessCss' => false,
+	));
+?>
+```
 
 <table>
 	<tr>
 		<th>Name</th>
-		<th>Options</th>
-		<th>Defaults</th>
+		<th>Type</th>
+		<th>Default</th>
 		<th>Description</th>
 	</tr>
 	<tr>
-		<td><strong>compress</strong></td>
-		<td><code>bool</code> (true/false)</td>
-		<td><code>false<strong></td>
-		<td>Force assets to be compressed, if production this defaults to <code>true</code>, otherwise <code>false</code>.</td>
-	</tr>
-	<tr>
-		<td><strong>production</strong></td>
-		<td><code>bool</code> (true/false)</td>
-		<td>attempts to read from Lithium Environments class</td>
-		<td>Force assets to render in production or not, if this isn't set then the plugin will attempt to determine this automagically.</td>
-	</tr>
-	<tr>
-		<td><strong>assets_root</strong></td>
-		<td>Pass in a path to your assets</td>
-		<td><code>LITHIUM_APP_PATH . "/webroot"</code></td>
-		<td>Where should the plugin look for your files, defaults to the standard <code>webroot</code> directory. The example above would look for CSS files in <code>/webroot/assets/css/</code></td>
-	</tr>
-	<tr>
-		<td><strong>locations</strong></td>
-		<td>array: <code>coffee</code> - <em>path to coffeescript on server</em><br /><code>node</code> - <em>path to node on server</em></td>
-		<td><code>coffee</code> - <code>/usr/bin/coffee</code><br /><code>node</code> - <code>/usr/bin/node</code></td>
-		<td>These are the locations of <code>node</code> and <code>coffeescript</code> on your server, defaults should suffice.</td>
-	</tr>
-	<tr>
-		<td><strong>source</strong></td>
-		<td>string: <code>composer</code><br /><code>submodule</code></td>
-		<td><code>composer</code></td>
+		<td><strong>blessCss</strong></td>
+		<td><code>Boolean</code></td>
+		<td><code>false</code></td>
 		<td>
-			This determines where the library will pull dependency libraries, composer uses vendor paths in
-			`libraries/_source` whereas submodule loads librarys within this plugin `libraries/li3_frontender/libraries`.
-			Normally you only need to set this option if you do not install this plugin via composer.
+			Checks that processed stylesheets don't have more selectors than IE's
+			limit. If a stylesheet has too many selectors, it is split into multiple
+			parts.
 		</td>
 	</tr>
 	<tr>
-		<td><strong>cacheOnly</strong></td>
-		<td>boolean</td>
-		<td><code>false<code></td>
+		<td><strong>cacheBuster</strong></td>
+		<td><code>Mixed</code></td>
+		<td><code>"modtime"</code></td>
 		<td>
-			If true, will display a 404 if the assets could not be read from cache. For some plugins, such as
-			`li3_docs` this will result in not being able to load the css contained in the plugin.
+			The cache busting strategy to use. Can be one of:
+			<ul>
+				<li><code>false</code>: Do not check original assets once they are processed.</li>
+				<li>
+					<code>"string"</code>: Tag processed assets with the
+					<code>cacheString</code> option. Assets are re-processed if the
+					<code>cacheString</code> changes.
+				</li>
+				<li>
+					<code>"modtime"</code>: Tag processed assets with the original asset's
+					file modification time. Assets are re-processed if the original file changes.
+				</li>
+			</ul>
+		</td>
+	</tr>
+	<tr>
+		<td><strong>cacheCheckLessImports</strong></td>
+		<td><code>Boolean</code></td>
+		<td><code>false</code></td>
+		<td>
+			If the <code>"modtime"</code> option is used for <code>cacheBuster</code>
+			this option will find local assets in less <code>@import</code>s and check
+			them for changes as well. This defaults to <code>false</code> because,
+			depending on your environment, this option may cause a significant slow-down.
+		</td>
+	</tr>
+	<tr>
+		<td><strong>cacheCheckManifestSameAssets</strong></td>
+		<td><code>Boolean</code></td>
+		<td><code>true</code></td>
+		<td>
+			If <code>cacheBuster</code> and <code>mergeAssets</code> are enabled,
+			this will tag processed manifests with a hash of their asset names. If the
+			contents of the manifest change, even if the assets have not changed, the
+			manifest will be re-processed.
+		</td>
+	</tr>
+	<tr>
+		<td><strong>cacheString</strong></td>
+		<td><code>String</code></td>
+		<td><code>"bust"</code></td>
+		<td>
+			When <code>cacheBuster</code> is <code>"string"</code> this is the value
+			that assets are tagged with.
 		</td>
 	</tr>
 	<tr>
 		<td><strong>manifests</strong></td>
-		<td>array</td>
-		<td><code>null<code></td>
+		<td><code>Array</code></td>
+		<td>empty array</td>
 		<td>
-			If set, you can specify assets in named lists in the config, then reference them from the helper by name. See below.
+			Specifies the manifests used. See the section on manifests.
+		</td>
+	</tr>
+	<tr>
+		<td><strong>mergeAssets</strong></td>
+		<td><code>Boolean</code></td>
+		<td><code>false</code></td>
+		<td>
+			If set, processed assets will be merged together into as few files as
+			possible. Otherwise each individual processed asset will be returned.
+		</td>
+	</tr>
+	<tr>
+		<td><strong>purgeStale</strong></td>
+		<td><code>Boolean</code></td>
+		<td><code>true</code></td>
+		<td>
+			When a manifest or asset is processed, if this is set, any other versions
+			of the file will be deleted before the new one is saved.
+		</td>
+	</tr>
+	<tr>
+		<td><strong>root</strong></td>
+		<td><code>String</code></td>
+		<td><code>null</code></td>
+		<td>
+			The webroot where assets are stored. If left <code>null</code> then Li3
+			will be queried for the webroot via <code>Media::webroot()</code>.
+		</td>
+	</tr>
+	<tr>
+		<td><strong>verbose</strong></td>
+		<td><code>Boolean</code></td>
+		<td><code>false</code></td>
+		<td>
+			If set, information about what assets are being processed will be printed
+			with <code>echo</code>! Only useful for debugging, and not even really
+			then.
 		</td>
 	</tr>
 </table>
 
 ## Manifests
-
-Use asset manifests if you wish to specify your assets in the library config rather than in the view.
+Use asset manifests to specify your assets in the library config.
 
 First, specify the manifest like this (below, "main" is the name of a manifest for JavaScript files):
 
-~~~ php
+```php
 <?php
 	Libraries::add('li3_frontender', array(
 		'manifests' => array(
 			'js' => array(
 				'main' => array(
 					'main.coffee',
-					'popup.js'
+					'popup.js',
 				)
 			)
 		)
 	));
 ?>
-~~~
+```
 
 Then, reference the manifest by name when calling the helper:
 
-~~~ php
+```php
 <?php $this->assets->script('main'); ?>
-~~~
-
-## Collaborate
-As always, I welcome your collaboration to make things "even more betterer", so fork and contribute if you feel the need.
+```

@@ -12,10 +12,7 @@
 			"homepage": "https://github.com/joseym"
 		}
 	],
-
 	"require": {
-		"php": ">=5.3",
-		"joseym/li3_installer": "master"
+		"php": ">=5.3"
 	}
-
 }
