@@ -1,0 +1,11 @@
+{
+	"name": "li3-tests",
+	"config":{
+		"vendor-dir":"libraries/_source",
+		"bin-dir": "bin/"
+	},
+	"require": {
+		"php": ">=5.3"
+		"mikey179/vfsStream": "1.3.*@dev"
+	}
+}
