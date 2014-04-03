@@ -99,7 +99,7 @@ class Manifest {
 			// Allow embedding manifests within manifests.
 			$seenAssets = array();
 			$seenManifests = array("{$this->name}.manifest" => true);
-			$filenameQueue = $this->filenames;
+			$filenameQueue = array_reverse($this->filenames);
 			while (!is_null($item = array_pop($filenameQueue))) {
 				if ('manifest' === pathinfo($item, PATHINFO_EXTENSION)) {
 					if (isset($seenManifests[$item])) continue;
@@ -109,22 +109,18 @@ class Manifest {
 						throw new Exception("Embedded manifest `{$this->type}/$item` not found.");
 					}
 					$embeddedAssets = $this->config['manifests'][$this->type][$item];
-					$filenameQueue = array_merge($filenameQueue, $embeddedAssets);
+					$filenameQueue = array_merge($filenameQueue, array_reverse($embeddedAssets));
 				} else {
-					if (!isset($seenAssets[$item])) $seenAssets[$item] = true;
+					// Handle lazy asset names.
+					// Resolving asset names can be expensive if your manifests are already built
+					// so including extensions in asset names is recommended.
+					if (!$lazyName = $this->lazyAssetName($item)) {
+						throw new Exception("Couldn't find a valid asset matching `$item`.");
+					}
+					$seenAssets[$lazyName] = true;
 				}
 			}
 			$this->filenames = array_keys($seenAssets);
-
-			// Handle lazy asset names.
-			// Resolving asset names can be expensive if your manifests are already built
-			// so including extensions in asset names is recommended.
-			foreach ($this->filenames as $i => $filename) {
-				if (!$lazyName = $this->lazyAssetName($filename)) {
-					throw new Exception("Couldn't find a valid asset matching `$filename`.");
-				}
-				$this->filenames[$i] = $lazyName;
-			}
 		}
 
 		if ($this->config['mergeAssets']) {
@@ -219,7 +215,7 @@ class Manifest {
 	 *
 	 * @param string $asset relative asset name
 	 */
-	protected function lazyAssetName($asset) {
+	public function lazyAssetName($asset) {
 		$altExts = array();
 		switch ($this->type) {
 			case 'js':
@@ -340,10 +336,11 @@ class Manifest {
 		return preg_match("/\.coffee|\.less/", $filename);
 	}
 
-	protected function mkdir($path) {
-		$info = pathinfo($path);
-		$directory = $info['dirname'];
-		`mkdir -p $directory`;
+	protected function rmkdir($path) {
+		$directory = pathinfo($path, PATHINFO_DIRNAME);
+		if (!is_dir($directory) && !mkdir($directory, 0777, true)) {
+			throw new Exception("Error creating directory `$directory`.");
+		}
 	}
 
 	protected function compileFile($path, $destination) {
@@ -370,7 +367,7 @@ class Manifest {
 			throw new Exception("Could not compile asset, cmd: `$cmd`, result: `$result[0]`.");
 		} else if ($result) {
 			$result = implode($result, "\n");
-			$this->mkdir($destination);
+			$this->rmkdir($destination);
 			file_put_contents($destination, $result);
 		}
 		$ms = (int)((microtime(true) - $start) * 1000);
@@ -409,9 +406,8 @@ class Manifest {
 	}
 
 	protected function copy($path, $destination) {
-		$this->mkdir($destination);
-		exec("cp $path $destination", $result, $ret);
-		if ($ret != 0) {
+		$this->rmkdir($destination);
+		if (!copy($path, $destination)) {
 			throw new Exception("Error copying `$path` to `$destination`.");
 		}
 	}
