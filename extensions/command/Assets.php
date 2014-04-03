@@ -7,11 +7,19 @@ use li3_frontender\Manifest;
 class Assets extends \lithium\console\Command {
 
 	public function run() {
-		$manifests = Manifest::all();
-		foreach($manifests as $manifest) {
-			$manifest->verbose = true;
-			$manifest->compile();
+		try {
+			$manifests = Manifest::all(array(
+				'blessCss' => true,
+				'verbose' => true,
+			));
+			foreach ($manifests as $manifest) {
+				$manifest->build();
+			}
+		} catch (\Exception $e) {
+			$this->stop(1, $e->getMessage());
 		}
 	}
 
 }
+
+?>
