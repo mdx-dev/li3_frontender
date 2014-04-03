@@ -14,9 +14,9 @@ before_install:
   - cd libraries/lithium
   - git remote set-url origin git://github.com/mdx-dev/lithium.git
   - git fetch origin && git reset --hard origin/master
-  - cd ../../
-  - cp app/libraries/li3_frontender/li3-composer.json composer.json
+  - cd ../../app
+  - cp libraries/li3_frontender/li3-composer.json composer.json
   - composer install
-  - cd app/libraries/li3_frontender
+  - cd libraries/li3_frontender
 
 script: ../../../libraries/lithium/console/li3 test tests
