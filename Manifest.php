@@ -3,44 +3,34 @@
 namespace li3_frontender;
 
 use lithium\core\Libraries;
-use lithium\core\Environment;
+use lithium\net\http\Media;
 use \Exception;
 
 class Manifest {
 
-	public $type;               // either 'js' or 'css'
-	public $name;               // name of manifest, configured in the app
-	public $filenames;          // asset filenames in this manifest
-	public $in_path;            // root directory where source files can be found, usually app/webroot/js or app/webroot/css
-	public $out_path;           // root directory where target files are written, usually app/webroot/js/compiled or app/webroot/css/compiled
-	public $verbose = false;    // set to true to get verbose logging about which assets are being built
-	public $mangle = false;     // set to true to combine individual assets and minify
-	public $timestamp = false;  // set to true to append timestamp of source file to target filenames (typically used with $mangle=false for dev mode)
+	public $type;      // either 'js' or 'css'
+	public $name;      // name of manifest, configured in the app
+	public $filenames; // asset filenames in this manifest
 
-	// list of assets that have already been processed
-	public static $processed = array();
-
-	/*
-	 * Resets the list of processed assets.
-	 *
-	 * Call this from the asset helper.
-	 */
-	public static function resetProcessed() {
-		static::$processed = array();
-	}
+	public $bless_binary  = 'blessc';
+	public $coffee_binary = 'coffee';
+	public $less_binary   = 'lessc';
 
 	/**
 	 * Returns an array of manifest objects based on the config.
 	 *
+	 * @param array $options options to pass to the manifest
 	 * @return array of Manifest objects
 	 */
-	public static function all() {
-		$config = Libraries::get('li3_frontender');
+	public static function all(array $options = array()) {
+		$config = Libraries::get('li3_frontender') + array(
+			'manifests' => array()
+		);
 
 		$all = array();
-		foreach($config['manifests'] as $type => $manifests){
-			foreach($manifests as $manifest => $filenames) {
-				$all[] = new Manifest($type, $manifest);
+		foreach ($config['manifests'] as $type => $manifests) {
+			foreach ($manifests as $manifest => $filenames) {
+				$all[] = Manifest::load($type, $manifest, $options);
 			}
 		}
 
@@ -48,117 +38,311 @@ class Manifest {
 	}
 
 	/**
+	 * Populates a new Manifest with the assets listed in the `manifests`
+	 * configuration array.
+	 *
+	 * @param string $type either 'js' or 'css'
+	 * @param string $name name of manifest
+	 * @param array $options options to pass to the manifest
+	 * @return Manifest
+	 */
+	public static function load($type, $name, array $options = array()) {
+		$config = Libraries::get('li3_frontender') + array(
+			'manifests' => array()
+		);
+		if (!isset($config['manifests'][$type][$name])) {
+			throw new Exception("Manifest `$type/$name` not found.");
+		}
+		$assets = $config['manifests'][$type][$name];
+		return new Manifest($type, $name, $assets, $options);
+	}
+
+	/**
 	 * Constructs a new Manifest.
 	 *
-	 * @param  string $type either 'js' or 'css'
-	 * @param  string $name name of manifest
+	 * @param string $type either 'js' or 'css'
+	 * @param string $name a name for the manifest.
+	 * @param mixed $files an asset name or array of asset names.
+	 * @param array $options options which override Li3 config
 	 * @return object Manifest
 	 */
-	public function __construct($type, $name) {
+	public function __construct($type, $name, $files = array(), array $options = array()) {
+		$defaults = array(
+			'blessCss'                     => false,
+			'cacheBuster'                  => 'modtime',
+			'cacheCheckLessImports'        => false,
+			'cacheCheckManifestSameAssets' => true,
+			'cacheString'                  => 'bust',
+			'manifests'                    => array(),
+			'mergeAssets'                  => false,
+			'purgeStale'                   => true,
+			'root'                         => null,
+			'verbose'                      => false,
+		);
+		$this->config = $options + Libraries::get('li3_frontender') + $defaults;
+
 		$this->type = $type;
 		$this->name = $name;
+		$this->filenames = is_array($files) ? $files : array($files);
+		$this->filenames = array_unique($this->filenames); // In the rare case of duplicates.
 
-		$this->less_binary = 'lessc';
-		$this->coffee_binary = "coffee";
-
-		$this->config = Libraries::get('li3_frontender');
-		if(!isset($this->config['manifests'][$type][$name])) {
-			throw new Exception("manifest $type/$name not found");
-		}
-		$this->filenames = $this->config['manifests'][$type][$name];
-		$this->mangle = $this->config['mangle'];
-
-		if(!isset($this->in_path)) $this->in_path = $this->inPath();
-		if(!preg_match('/\/$/', $this->in_path)) $this->in_path .= '/';
-
-		if(!isset($this->out_path)) $this->out_path = $this->outPath();
-		if(!preg_match('/\/$/', $this->out_path)) $this->out_path .= '/';
-	}
-
-	/**
-	 * Compiles all assets in a manifest.
-	 *
-	 * @param array $files list of (source) files to compile (if null, will compile all files in manifest)
-	 * @return array if($this->mangle) array with single path to combined, mangled asset
-	 *               otherwise, absolute paths to individual built assets
-	 */
-	public function compile($files=null) {
-		$in_manifest = array();
-		if($this->verbose) echo "{$this->type} manifest '{$this->name}'\n";
-		if($files) {
-			$files = array_intersect_key($this->filenameMappings(), array_flip($files));
-		} else {
-			$files = $this->filenameMappings();
-		}
-		foreach($files as $in => $out) {
-			$this->copyOrCompile($in, $out);
-			$in_manifest[] = $out;
-		}
-		if($this->mangle) {
-			$mangled_filename = $this->mangledFilename();
-			$this->merge($mangled_filename, $in_manifest);
-			return array($mangled_filename);
-		} else {
-			return $in_manifest;
+		// Default to the Li3 webroot.
+		if (is_null($this->config['root'])) {
+			$this->config['root'] = Media::webroot();
 		}
 	}
 
-	/**
-	 * Returns the combined, minified (mangled) filename
-	 * for this manifest.
-	 *
-	 * @return string filename
-	 */
-	public function mangledFilename() {
-		$rev = $this->cacheString();
-		return "{$this->out_path}{$this->name}{$rev}.{$this->type}";
-	}
+	public function build() {
+		$compiled = array(); // Stores full paths of compiled/copied assets.
 
-	/**
-	 * Returns an associative array mapping source to destination
-	 * for each individual asset in this manifest.
-	 *
-	 * @return array with source => destination pairs
-	 */
-	public function filenameMappings() {
-		$mappings = array();
-		foreach($this->filenames as $filename) {
-			$filename = $this->appendFileType($filename, true);
-			$in = $this->in_path . $filename;
-			$out = $this->appendFileType($this->out_path . $filename);
-			if($this->timestamp) $out = $this->appendTimestamp($out, filemtime($in));
-			$mappings[$in] = $out;
+		if ($this->requiresFullAssetNames()) {
+			$this->filenames = $this->stepResolveAssets($this->filenames);
 		}
-		return $mappings;
-	}
 
-	/**
-	 * Returns a new path with the given timestamp append (just before the file extension)
-	 *
-	 * @param string $file filename
-	 * @param string $timestamp timestamp to append
-	 * @return string new filename
-	 */
-	protected function appendTimestamp($file, $timestamp) {
-		return preg_replace("/\\.(.+)$/", "_$timestamp.\\1", $file);
-	}
+		if ($this->config['mergeAssets']) {
+			$manifestName = $this->manifestCompiledName();
+			$manifestOutPath = $this->outPath() . '/' . $manifestName;
+		}
 
-	protected function copyOrCompile($in, $out) {
-		if($this->needsCompileStep($in)) {
-			$start = microtime(true);
-			if(!in_array($out, static::$processed)) {
-				$this->compileFile($in, $out);
-				static::$processed[] = $out;
+		// Compile
+		if (!$this->config['mergeAssets'] || !file_exists($manifestOutPath)) {
+			if ($this->config['verbose']) echo "{$this->type} manifest `{$this->name}`\n";
+			$compiled = $this->stepCompile($this->filenames);
+		}
+
+		// Uglify and merge
+		if ($this->config['mergeAssets']) {
+			if (count($compiled)) {
+				if ($this->config['purgeStale']) $this->purgeManifest();
+				$this->merge($manifestOutPath, $compiled);
 			}
-			$ms = (int)((microtime(true) - $start) * 1000);
-			if($this->verbose) echo("  compiled $out ($ms msec)\n");
-		} else {
-			$this->copy($in, $out);
+			$compiled = array($manifestOutPath);
+		}
+
+		// Bless
+		if ('css' === $this->type && $this->config['blessCss']) {
+			$blessed = array();
+			foreach ($compiled as $inPath) {
+				if (!$outPaths = $this->findBlessedFiles($inPath)) {
+					$outPaths = $this->blessFile($inPath);
+				}
+				$blessed = array_merge($blessed, $outPaths);
+			}
+			$compiled = $blessed;
+		}
+
+		return $this->relativePaths($compiled);
+	}
+
+	/**
+	 * Compiles an array of individual assets.
+	 *
+	 * @param array $assets asset names
+	 * @return array of paths to compiled asset files.
+	 */
+	public function stepCompile($assets) {
+		$compiled = array();
+		foreach ($assets as $filename) {
+			$compiledName = $this->assetCompiledName($filename);
+			$fullInPath = $this->inPath() . '/' . $filename;
+			$fullOutPath = $this->outPath() . '/' . $compiledName;
+
+			if (!file_exists($fullOutPath)) {
+				if (!file_exists($fullInPath)) {
+					throw new Exception("Asset `$filename` cannot be found at `$fullInPath`.");
+				}
+				if ($this->config['purgeStale']) $this->purgeAsset($filename);
+				if ($this->needsCompileStep($filename)) {
+					$this->compileFile($fullInPath, $fullOutPath);
+				} else {
+					$this->copy($fullInPath, $fullOutPath);
+				}
+			}
+			$compiled[] = $fullOutPath;
+		}
+		return $compiled;
+	}
+
+	/**
+	 * Resolves embedded manifests and lazy asset names.
+	 *
+	 * @param array $assets array of asset names
+	 * @return array of asset names
+	 */
+	public function stepResolveAssets($assets) {
+		$seenAssets = array();
+		$seenManifests = array("{$this->name}.manifest" => true);
+		$filenameQueue = array_reverse($assets);
+		while (!is_null($item = array_pop($filenameQueue))) {
+			if ('manifest' === pathinfo($item, PATHINFO_EXTENSION)) {
+				if (isset($seenManifests[$item])) continue;
+				$seenManifests[$item] = true;
+				$item = pathinfo($item, PATHINFO_FILENAME);
+				if (!isset($this->config['manifests'][$this->type][$item])) {
+					throw new Exception("Embedded manifest `{$this->type}/$item` not found.");
+				}
+				$embeddedAssets = $this->config['manifests'][$this->type][$item];
+				$filenameQueue = array_merge($filenameQueue, array_reverse($embeddedAssets));
+			} else {
+				// Handle lazy asset names.
+				// Resolving asset names can be expensive if your manifests are already built
+				// so including extensions in asset names is recommended.
+				if (!$lazyName = $this->lazyAssetName($item)) {
+					throw new Exception("Couldn't find a valid asset matching `$item`.");
+				}
+				$seenAssets[$lazyName] = true;
+			}
+		}
+		return array_keys($seenAssets);
+	}
+
+	// There are some cases where we can proceed without resolving lazy asset
+	// names.
+	protected function requiresFullAssetNames() {
+		return (
+			!$this->config['mergeAssets']
+			|| (
+				$this->config['cacheBuster']
+				&& (
+					$this->config['cacheBuster'] != 'string'
+					|| $this->config['cacheCheckManifestSameAssets']
+				)
+			)
+			|| !file_exists($this->manifestCompiledName())
+		);
+	}
+
+	protected function purgeManifest() {
+		$name = $this->name . '.manifest';
+		foreach (glob("{$this->outPath()}/{$name}*") as $stale) {
+			unlink($stale);
 		}
 	}
 
-	protected function cacheString() {
-		return $this->config['cacheString'];
+	protected function purgeAsset($filename) {
+		foreach (glob("{$this->outPath()}/{$filename}*") as $stale) {
+			unlink($stale);
+		}
+	}
+
+	/**
+	 * Typing a few extra characters for the sake of clarity is difficult. Help
+	 * out developers that believe in magic by digging around for a similar
+	 * asset. </sarcasm>
+	 * If `$asset` has a valid extension, `$asset` is returned. If no
+	 * extension is found, alternatives are tried ('coffee' then 'js' for js
+	 * manifests; 'less' then 'css' for css manifests). An altered path is
+	 * returned if an alternative asset is found, otherwise false is returned.
+	 *
+	 * @param string $asset relative asset name
+	 */
+	public function lazyAssetName($asset) {
+		$altExts = array();
+		switch ($this->type) {
+			case 'js':
+				$altExts = array('coffee', 'js');
+				break;
+			case 'css':
+				$altExts = array('less', 'css');
+				break;
+		}
+		if (in_array(pathinfo($asset, PATHINFO_EXTENSION), $altExts)) return $asset;
+		$fullpath = $this->inPath() . '/' . $asset;
+		foreach ($altExts as $ext) {
+			$possible = "{$fullpath}.{$ext}";
+			if (file_exists($possible)) return "{$asset}.{$ext}";
+		}
+		return false;
+	}
+
+	/**
+	 * Removes a number of characters from the begining of each path equal to
+	 * the `root` option's length, i.e., stupidly makes paths relative.
+	 *
+	 * @param array $paths array of string paths.
+	 * @param string $root root path to use, leave blank to use the option value.
+	 */
+	protected function relativePaths(array $paths, $root = null) {
+		$relative = array();
+		$rootLength = $root ? strlen($root) : strlen($this->config['root']);
+		foreach ($paths as $path) {
+			$relative[] = substr($path, $rootLength);
+		}
+		return $relative;
+	}
+
+	protected function ensureExtension($name, $extension) {
+		$nameExt = pathinfo($name, PATHINFO_EXTENSION);
+		if ($nameExt !== $extension) return $name . '.' . $extension;
+		return $name;
+	}
+
+	public function assetModTime($filename) {
+		$fullPath = $this->inPath() . '/' . $filename;
+		if (!file_exists($fullPath)) {
+			throw new Exception("Asset `$filename` cannot be found at `$fullPath`.");
+		}
+		$mtime = filemtime($fullPath) ? : 0;
+
+		// Check files imported by less assets.
+		if ('css' === $this->type && $this->config['cacheCheckLessImports']) {
+			if (!pathinfo($fullPath, PATHINFO_EXTENSION) === 'less') break;
+			$imports = $this->relativePaths(
+				$this->findLessImports($fullPath),
+				$this->inPath() . '/'
+			);
+			foreach ($imports as $import) {
+				$mtime = max($mtime, $this->assetModTime($import));
+			}
+		}
+
+		return $mtime;
+	}
+
+	protected function findLessImports($fullPath) {
+		$cmd = $this->less_binary . ' --depends ' . $fullPath . ' .';
+		$cmd .= ' | tr -s " " "\n" | tail -n +2';
+		exec($cmd, $result, $ret);
+		if ($ret !== 0) {
+			throw new Exception("Failed checking less imports for `{$fullPath}`.");
+		}
+		return $result;
+	}
+
+	public function assetCompiledName($filename) {
+		switch ($this->config['cacheBuster']) {
+			case 'modtime':
+				$filename .= '.' . $this->assetModTime($filename);
+				break;
+			case 'string':
+				$filename .= '.' . $this->config['cacheString'];
+				break;
+		}
+		return $this->ensureExtension($filename, $this->type);
+	}
+
+	public function manifestCompiledName() {
+		$name = $this->name . '.manifest';
+
+		// Manifest contents can change without the modtime changing so keep track
+		// of what assets are included in a manifest.
+		if ($this->config['cacheBuster'] && $this->config['cacheCheckManifestSameAssets']) {
+			$name .= '.' . md5(implode(',', $this->filenames));
+		}
+
+		switch ($this->config['cacheBuster']) {
+			case 'modtime':
+				$mtime = 0;
+				foreach ($this->filenames as $filename) {
+					$mtime = max($mtime, $this->assetModTime($filename));
+				}
+				$name .= '.' . $mtime;
+				break;
+			case 'string':
+				$name .= '.' . $this->config['cacheString'];
+				break;
+		}
+		return $this->ensureExtension($name, $this->type);
 	}
 
 	protected function outPath() {
@@ -169,27 +353,19 @@ class Manifest {
 		return $this->config['root'] . "/" . $this->type;
 	}
 
-	protected function appendFileType($path, $allow_any=false) {
-		$ftype = pathinfo($path, PATHINFO_EXTENSION);
-		$allowed = array('js', 'css');
-		if($allow_any) $allowed = array_merge($allowed, array('coffee', 'less'));
-		if(!$ftype || !in_array($ftype, $allowed)) {
-			$path .= '.' . $this->type;
-		}
-		return $path;
-	}
-
 	protected function needsCompileStep($filename) {
 		return preg_match("/\.coffee|\.less/", $filename);
 	}
 
-	protected function mkdir($path) {
-		$info = pathinfo($path);
-		$directory = $info['dirname'];
-		`mkdir -p $directory`;
+	protected function rmkdir($path) {
+		$directory = pathinfo($path, PATHINFO_DIRNAME);
+		if (!is_dir($directory) && !mkdir($directory, 0777, true)) {
+			throw new Exception("Error creating directory `$directory`.");
+		}
 	}
 
 	protected function compileFile($path, $destination) {
+		$start = microtime(true);
 		$info = pathinfo($path);
 		$ftype = $info['extension'];
 		$ret = 0;
@@ -205,28 +381,55 @@ class Manifest {
 			exec($cmd, $result, $ret);
 			break;
 		default:
-			echo("  unknown file type: $destination\n");
-			exit(1);
+			throw new Exception("Cannot compile unknown type `{$destination}`.");
 		}
 
-		if($ret != 0) {
-			echo("    ERROR - could not compile asset.\n");
-			echo("    Try running: $cmd\n");
-			print_r(compact('cmd', 'result', 'ret'));
-			exit(1);
-		} else if($result) {
+		if ($ret != 0) {
+			throw new Exception("Could not compile asset, cmd: `$cmd`, result: `$result[0]`.");
+		} else if ($result) {
 			$result = implode($result, "\n");
-			$this->mkdir($destination);
+			$this->rmkdir($destination);
 			file_put_contents($destination, $result);
 		}
+		$ms = (int)((microtime(true) - $start) * 1000);
+		if ($this->config['verbose']) echo("  compiled $destination ($ms msec)\n");
+	}
+
+	protected function findBlessedFiles($filePath) {
+		$blessed = glob($filePath . '.blessed*') ? : array();
+		return $blessed;
+	}
+
+	protected function moveBlessedFiles($tmpPath, $realPath) {
+		$files = array();
+		$tmpInfo = pathinfo($tmpPath);
+		$blessed = glob("{$tmpInfo['dirname']}/{$tmpInfo['filename']}*") ? : array();
+		foreach ($blessed as $i => $in) {
+			$out = "{$realPath}.blessed" . ($i + 1) . '.css';
+			rename($in, $out);
+			$files[] = $out;
+		}
+		return $files;
+	}
+
+	protected function blessFile($path) {
+		// A bit of a hack to get around blessc's poor renaming...
+		$pathInfo = pathinfo($path);
+		$tmpPath = $pathInfo['dirname'] . '/' . md5($pathInfo['basename']) . '.css';
+
+		$cmd = "{$this->bless_binary} --no-cache-buster --no-cleanup --no-imports {$path} {$tmpPath}";
+		exec($cmd, $result, $ret);
+		if ($ret !== 0) {
+			throw new Exception("Could not bless asset: `{$cmd}`.");
+		}
+
+		return $this->moveBlessedFiles($tmpPath, $path);
 	}
 
 	protected function copy($path, $destination) {
-		$this->mkdir($destination);
-		system("cp $path $destination", $ret);
-		if($ret != 0) {
-			echo("error copying $path to $destination\n");
-			exit(1);
+		$this->rmkdir($destination);
+		if (!copy($path, $destination)) {
+			throw new Exception("Error copying `$path` to `$destination`.");
 		}
 	}
 
@@ -235,22 +438,19 @@ class Manifest {
 		switch($this->type) {
 		case 'js':
 			$cmd = "uglifyjs " . implode($filenames, ' ') . " -o $path -m 2>/dev/null";
-			system($cmd, $ret);
+			exec($cmd, $result, $ret);
 			break;
 		case 'css':
 			$cmd = "uglifycss " . implode($filenames, ' ') . " 2>/dev/null > $path";
-			system($cmd, $ret);
+			exec($cmd, $result, $ret);
 			break;
 		default:
-			echo("  unknown type: {$this->type}\n");
-			exit(1);
+			throw new Exception("Cannot merge unknown type `{$this->type}`.");
 		}
 		$ms = (int)((microtime(true) - $start) * 1000);
-		if($ret != 0) {
-			echo("  There was an error merging files.\n");
-			echo("  Try running: $cmd\n");
-			exit(1);
-		} else if($this->verbose) {
+		if ($ret != 0) {
+			throw new Exception("There was an error merging files, cmd: `$cmd`.");
+		} else if ($this->config['verbose']) {
 			echo("  wrote $path ($ms msec)\n");
 		}
 	}
