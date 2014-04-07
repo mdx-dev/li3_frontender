@@ -96,31 +96,7 @@ class Manifest {
 		$compiled = array(); // Stores full paths of compiled/copied assets.
 
 		if ($this->requiresFullAssetNames()) {
-			// Allow embedding manifests within manifests.
-			$seenAssets = array();
-			$seenManifests = array("{$this->name}.manifest" => true);
-			$filenameQueue = array_reverse($this->filenames);
-			while (!is_null($item = array_pop($filenameQueue))) {
-				if ('manifest' === pathinfo($item, PATHINFO_EXTENSION)) {
-					if (isset($seenManifests[$item])) continue;
-					$seenManifests[$item] = true;
-					$item = pathinfo($item, PATHINFO_FILENAME);
-					if (!isset($this->config['manifests'][$this->type][$item])) {
-						throw new Exception("Embedded manifest `{$this->type}/$item` not found.");
-					}
-					$embeddedAssets = $this->config['manifests'][$this->type][$item];
-					$filenameQueue = array_merge($filenameQueue, array_reverse($embeddedAssets));
-				} else {
-					// Handle lazy asset names.
-					// Resolving asset names can be expensive if your manifests are already built
-					// so including extensions in asset names is recommended.
-					if (!$lazyName = $this->lazyAssetName($item)) {
-						throw new Exception("Couldn't find a valid asset matching `$item`.");
-					}
-					$seenAssets[$lazyName] = true;
-				}
-			}
-			$this->filenames = array_keys($seenAssets);
+			$this->filenames = $this->stepResolveAssets($this->filenames);
 		}
 
 		if ($this->config['mergeAssets']) {
@@ -131,24 +107,7 @@ class Manifest {
 		// Compile
 		if (!$this->config['mergeAssets'] || !file_exists($manifestOutPath)) {
 			if ($this->config['verbose']) echo "{$this->type} manifest `{$this->name}`\n";
-			foreach ($this->filenames as $filename) {
-				$compiledName = $this->assetCompiledName($filename);
-				$fullInPath = $this->inPath() . '/' . $filename;
-				$fullOutPath = $this->outPath() . '/' . $compiledName;
-
-				if (!file_exists($fullOutPath)) {
-					if (!file_exists($fullInPath)) {
-						throw new Exception("Asset `$filename` cannot be found at `$fullInPath`.");
-					}
-					if ($this->config['purgeStale']) $this->purgeAsset($filename);
-					if ($this->needsCompileStep($filename)) {
-						$this->compileFile($fullInPath, $fullOutPath);
-					} else {
-						$this->copy($fullInPath, $fullOutPath);
-					}
-				}
-				$compiled[] = $fullOutPath;
-			}
+			$compiled = $this->stepCompile($this->filenames);
 		}
 
 		// Uglify and merge
@@ -173,6 +132,68 @@ class Manifest {
 		}
 
 		return $this->relativePaths($compiled);
+	}
+
+	/**
+	 * Compiles an array of individual assets.
+	 *
+	 * @param array $assets asset names
+	 * @return array of paths to compiled asset files.
+	 */
+	public function stepCompile($assets) {
+		$compiled = array();
+		foreach ($assets as $filename) {
+			$compiledName = $this->assetCompiledName($filename);
+			$fullInPath = $this->inPath() . '/' . $filename;
+			$fullOutPath = $this->outPath() . '/' . $compiledName;
+
+			if (!file_exists($fullOutPath)) {
+				if (!file_exists($fullInPath)) {
+					throw new Exception("Asset `$filename` cannot be found at `$fullInPath`.");
+				}
+				if ($this->config['purgeStale']) $this->purgeAsset($filename);
+				if ($this->needsCompileStep($filename)) {
+					$this->compileFile($fullInPath, $fullOutPath);
+				} else {
+					$this->copy($fullInPath, $fullOutPath);
+				}
+			}
+			$compiled[] = $fullOutPath;
+		}
+		return $compiled;
+	}
+
+	/**
+	 * Resolves embedded manifests and lazy asset names.
+	 *
+	 * @param array $assets array of asset names
+	 * @return array of asset names
+	 */
+	public function stepResolveAssets($assets) {
+		$seenAssets = array();
+		$seenManifests = array("{$this->name}.manifest" => true);
+		$filenameQueue = array_reverse($assets);
+		while (!is_null($item = array_pop($filenameQueue))) {
+			if ('manifest' === pathinfo($item, PATHINFO_EXTENSION)) {
+				if (isset($seenManifests[$item])) continue;
+				$seenManifests[$item] = true;
+				$item = pathinfo($item, PATHINFO_FILENAME);
+				if (!isset($this->config['manifests'][$this->type][$item])) {
+					throw new Exception("Embedded manifest `{$this->type}/$item` not found.");
+				}
+				$embeddedAssets = $this->config['manifests'][$this->type][$item];
+				$filenameQueue = array_merge($filenameQueue, array_reverse($embeddedAssets));
+			} else {
+				// Handle lazy asset names.
+				// Resolving asset names can be expensive if your manifests are already built
+				// so including extensions in asset names is recommended.
+				if (!$lazyName = $this->lazyAssetName($item)) {
+					throw new Exception("Couldn't find a valid asset matching `$item`.");
+				}
+				$seenAssets[$lazyName] = true;
+			}
+		}
+		return array_keys($seenAssets);
 	}
 
 	// There are some cases where we can proceed without resolving lazy asset
