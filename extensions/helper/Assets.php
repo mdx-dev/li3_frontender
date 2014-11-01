@@ -14,8 +14,8 @@ class Assets extends \lithium\template\Helper {
 	 * @param  string $manifest name of manifest
 	 * @return string stylesheet `<link>` tag(s)
 	 */
-	public function style($manifest) {
-		$files = $this->style_list($manifest);
+	public function style($manifest, $options = array()) {
+		$files = $this->style_list($manifest, $options);
 		return $this->_html('style', $files);
 	}
 
@@ -27,8 +27,8 @@ class Assets extends \lithium\template\Helper {
 	 * @param  string $manifest name of manifest
 	 * @return array stylesheet files
 	 */
-	public function style_list($manifest) {
-		return $this->_build('css', $manifest);
+	public function style_list($manifest, $options = array()) {
+		return $this->_build('css', $manifest, $options);
 	}
 
 	/**
@@ -67,8 +67,8 @@ class Assets extends \lithium\template\Helper {
 	 * @param  string $manifest name of manifest
 	 * @return array of files
 	 */
-	protected function _build($type, $manifest) {
-		$manifest = Manifest::load($type, $manifest);
+	protected function _build($type, $manifest, $options = array()) {
+		$manifest = Manifest::load($type, $manifest, $options);
 		return $manifest->build();
 	}
 
